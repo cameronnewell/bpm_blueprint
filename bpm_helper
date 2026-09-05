@@ -1,16 +1,18 @@
-template:
-  - trigger:
-      - platform: mqtt
-        topic: "bifrost/audio/bpm"
-    sensor:
-      - name: "BPM Debounced"
-        unique_id: bpm_debounced
-        unit_of_measurement: "bpm"
-        state: >
-          {% set new_bpm = trigger.payload | float(0) %}
-          {% set old_bpm = this.state | float(0) if this.state not in ['unknown', 'unavailable', none] else 0 %}
-          {% if old_bpm == 0 or (new_bpm - old_bpm) | abs >= 4 %}
-            {{ new_bpm }}
-          {% else %}
-            {{ old_bpm }}
-          {% endif %}
+Click + Add MQTT device
+It'll ask for a device name first (e.g. "Audio BPM") — this is just a container/grouping, not an entity itself
+After creating the device, you'll get an option to add an entity to it — choose Sensor
+Fill in the entity form:
+Name: BPM Debounced
+State topic: bifrost/audio/bpm
+Unit of measurement: bpm
+Device class: None
+Expand Advanced settings (or it may just show more fields below without a separate expander in this version) → Value template field → paste:
+
+     {% set new_bpm = value | float(0) %}
+     {% set old_bpm = this.state | float(0) if this.state not in ['unknown','unavailable',none] else 0 %}
+     {% if old_bpm == 0 or (new_bpm - old_bpm) | abs >= 4 %}
+       {{ new_bpm }}
+     {% else %}
+       {{ old_bpm }}
+     {% endif %}
+
