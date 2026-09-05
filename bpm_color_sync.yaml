@@ -1,0 +1,115 @@
+blueprint:
+  name: BPM Color Sync
+  description: >
+    Cycles a set of lights through a color palette at a tempo derived from
+    a BPM sensor. Supports daily (gentle, divisor-based) and party
+    (fast, fixed step) modes via a shared mode helper. Create one instance
+    per light group.
+  domain: automation
+  input:
+    bpm_sensor:
+      name: BPM Sensor
+      selector: {entity: {domain: sensor}}
+    mode_helper:
+      name: Mode Helper (expects off/daily/party)
+      selector: {entity: {domain: input_select}}
+    divisor_helper:
+      name: Divisor Helper (daily mode beats-per-change)
+      selector: {entity: {domain: input_select}}
+    target_lights:
+      name: Target Lights
+      selector:
+        target:
+          entity:
+            domain: light
+    min_bpm_change:
+      name: Minimum BPM change to restart the loop
+      default: 4
+      selector: {number: {min: 0, max: 30}}
+    party_step_beats:
+      name: Party mode - beats per color change
+      default: 1
+      selector: {number: {min: 1, max: 64, mode: box}}
+    party_transition_fraction:
+      name: Party mode - transition as fraction of period
+      default: 0.3
+      selector: {number: {min: 0.05, max: 1, step: 0.05, mode: slider}}
+    daily_transition_fraction:
+      name: Daily mode - transition as fraction of period
+      default: 0.9
+      selector: {number: {min: 0.05, max: 1, step: 0.05, mode: slider}}
+    party_palette:
+      name: Party Palette (list of [hue, saturation] pairs)
+      default:
+        - [330, 90]
+        - [10, 95]
+        - [50, 90]
+        - [190, 85]
+        - [280, 85]
+      selector: {object:}
+    daily_palette:
+      name: Daily Palette (list of [hue, saturation] pairs)
+      default:
+        - [20, 40]
+        - [30, 55]
+        - [45, 35]
+        - [15, 60]
+        - [195, 35]
+        - [210, 45]
+        - [180, 30]
+        - [220, 50]
+      selector: {object:}
+
+mode: restart
+
+trigger:
+  - platform: state
+    entity_id: !input bpm_sensor
+  - platform: state
+    entity_id: !input mode_helper
+  - platform: state
+    entity_id: !input divisor_helper
+
+variables:
+  bpm_sensor: !input bpm_sensor
+  mode_helper: !input mode_helper
+  divisor_helper: !input divisor_helper
+  min_bpm_change: !input min_bpm_change
+  party_step_beats: !input party_step_beats
+  party_transition_fraction: !input party_transition_fraction
+  daily_transition_fraction: !input daily_transition_fraction
+  party_palette: !input party_palette
+  daily_palette: !input daily_palette
+
+condition:
+  - condition: template
+    value_template: >
+      {{ states(mode_helper) != 'off' and
+         (trigger.entity_id != bpm_sensor or
+          trigger.from_state is none or
+          trigger.to_state.state in ['unknown','unavailable'] or
+          trigger.from_state.state in ['unknown','unavailable'] or
+          (trigger.to_state.state|float(0) - trigger.from_state.state|float(0))|abs >= min_bpm_change) }}
+
+action:
+  - variables:
+      is_party: "{{ states(mode_helper) == 'party' }}"
+      bpm: "{{ states(bpm_sensor) | float(90) }}"
+      divisor: "{{ states(divisor_helper) | int(16) }}"
+      step_beats: "{{ party_step_beats if is_party else divisor }}"
+      period_ms: "{{ ((60000 / bpm) * step_beats) | round(0) }}"
+      trans_fraction: "{{ party_transition_fraction if is_party else daily_transition_fraction }}"
+      trans: "{{ (period_ms / 1000 * trans_fraction) | round(2) }}"
+      palette: "{{ party_palette if is_party else daily_palette }}"
+  - repeat:
+      while: "{{ true }}"
+      sequence:
+        - variables:
+            color: "{{ palette[(repeat.index - 1) % (palette | length)] }}"
+        - service: light.turn_on
+          target: !input target_lights
+          data:
+            hs_color: "{{ color }}"
+            transition: "{{ trans }}"
+        - delay:
+            milliseconds: "{{ period_ms }}"
