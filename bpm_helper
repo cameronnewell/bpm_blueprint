@@ -8,11 +8,11 @@ Unit of measurement: bpm
 Device class: None
 Expand Advanced settings (or it may just show more fields below without a separate expander in this version) → Value template field → paste:
 
-     {% set new_bpm = value | float(0) %}
-     {% set old_bpm = this.state | float(0) if this.state not in ['unknown','unavailable',none] else 0 %}
-     {% if old_bpm == 0 or (new_bpm - old_bpm) | abs >= 4 %}
-       {{ new_bpm }}
-     {% else %}
-       {{ old_bpm }}
-     {% endif %}
+{% set new_bpm = value_json.bpm | float(0) %}
+{% set old_bpm = this.state | float(0) if this.state not in ['unknown','unavailable',none] else 0 %}
+{% if old_bpm == 0 or (new_bpm - old_bpm) | abs >= 4 %}
+  {{ new_bpm }}
+{% else %}
+  {{ old_bpm }}
+{% endif %}
 
