@@ -1,34 +1,26 @@
-mode: restart
-
-sequence:
-  - variables:
-      bpm_sensor: !input bpm_sensor
-      selected_mode: !input mode
-      is_party: "{{ selected_mode == 'party' }}"
-      daily_divisor: !input daily_divisor
-      party_step_beats: !input party_step_beats
-      party_transition_fraction: !input party_transition_fraction
-      daily_transition_fraction: !input daily_transition_fraction
-      party_palette: !input party_palette
-      daily_palette: !input daily_palette
-      palette: "{{ party_palette if is_party else daily_palette }}"
-  - repeat:
-      count: 500
-      sequence:
-        - variables:
-            bpm: "{{ states(bpm_sensor) | float(90) }}"
-            step_beats: "{{ party_step_beats if is_party else daily_divisor }}"
-            period_ms: "{{ ((60000 / bpm) * step_beats) | round(0) }}"
-            trans_fraction: "{{ party_transition_fraction if is_party else daily_transition_fraction }}"
-            trans: "{{ (period_ms / 1000 * trans_fraction) | round(2) }}"
-            color: "{{ palette[(repeat.index - 1) % (palette | length)] }}"
-        - service: light.turn_on
-          target: !input target_lights
-          data:
-            hs_color: "{{ color }}"
-            transition: "{{ trans }}"
-        - delay:
-            milliseconds: "{{ period_ms }}"
-  - service: script.turn_on
-    target:
-      entity_id: "{{ this.entity_id }}"
+blueprint:
+  name: BPM Color Cycle
+  description: >
+    A callable script that cycles target lights through a color palette at
+    a tempo derived from a BPM sensor, re-read every cycle so tempo drifts
+    with the music in real time. Mode (daily/party) and all tuning are
+    fixed at creation time - no runtime dropdowns or helpers. Start with
+    script.turn_on, stop with script.turn_off, from any other automation.
+  domain: script
+  input:
+    bpm_sensor:
+      name: BPM Sensor
+      description: Your debounced BPM sensor, e.g. sensor.bpm_debounced
+      selector:
+        entity:
+          domain: sensor
+    target_lights:
+      name: Target Lights
+      selector:
+        target:
+          entity:
+            domain: light
+    mode:
+      name: Mode
+      selector:
+        select:
