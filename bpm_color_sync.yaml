@@ -24,3 +24,98 @@ blueprint:
       name: Mode
       selector:
         select:
+          options:
+            - "daily"
+            - "party"
+    daily_divisor:
+      name: Daily mode - beats per color change
+      default: 16
+      selector:
+        number:
+          min: 1
+          max: 64
+          mode: box
+    party_step_beats:
+      name: Party mode - beats per color change
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 64
+          mode: box
+    party_transition_fraction:
+      name: Party mode - transition as fraction of period
+      default: 0.3
+      selector:
+        number:
+          min: 0.05
+          max: 1
+          step: 0.05
+          mode: slider
+    daily_transition_fraction:
+      name: Daily mode - transition as fraction of period
+      default: 0.9
+      selector:
+        number:
+          min: 0.05
+          max: 1
+          step: 0.05
+          mode: slider
+    party_palette:
+      name: Party Palette (list of [hue, saturation] pairs)
+      default:
+        - [330, 90]
+        - [10, 95]
+        - [50, 90]
+        - [190, 85]
+        - [280, 85]
+      selector:
+        object: {}
+    daily_palette:
+      name: Daily Palette (list of [hue, saturation] pairs)
+      default:
+        - [20, 40]
+        - [30, 55]
+        - [45, 35]
+        - [15, 60]
+        - [195, 35]
+        - [210, 45]
+        - [180, 30]
+        - [220, 50]
+      selector:
+        object: {}
+
+mode: restart
+
+sequence:
+  - variables:
+      bpm_sensor: !input bpm_sensor
+      selected_mode: !input mode
+      is_party: "{{ selected_mode == 'party' }}"
+      daily_divisor: !input daily_divisor
+      party_step_beats: !input party_step_beats
+      party_transition_fraction: !input party_transition_fraction
+      daily_transition_fraction: !input daily_transition_fraction
+      party_palette: !input party_palette
+      daily_palette: !input daily_palette
+      palette: "{{ party_palette if is_party else daily_palette }}"
+  - repeat:
+      count: 500
+      sequence:
+        - variables:
+            bpm: "{{ states(bpm_sensor) | float(90) }}"
+            step_beats: "{{ party_step_beats if is_party else daily_divisor }}"
+            period_ms: "{{ ((60000 / bpm) * step_beats) | round(0) }}"
+            trans_fraction: "{{ party_transition_fraction if is_party else daily_transition_fraction }}"
+            trans: "{{ (period_ms / 1000 * trans_fraction) | round(2) }}"
+            color: "{{ palette[(repeat.index - 1) % (palette | length)] }}"
+        - service: light.turn_on
+          target: !input target_lights
+          data:
+            hs_color: "{{ color }}"
+            transition: "{{ trans }}"
+        - delay:
+            milliseconds: "{{ period_ms }}"
+  - service: script.turn_on
+    target:
+      entity_id: "{{ this.entity_id }}"
